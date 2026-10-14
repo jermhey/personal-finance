@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Portfolio replay</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="mast">
+        <p class="eyebrow">Personal finance</p>
+        <h1>Portfolio replay</h1>
+        <p class="lede">
+          Say what you put in, stretch by stretch. Each stretch can be a percentage
+          split or a dollar amount in each holding. The chart is what that would have been worth.
+        </p>
+      </header>
+      <div class="layout">
+        <form id="controls" class="controls"></form>
+        <main class="results" id="results">
+          <section class="placeholder" id="placeholder">
+            <h2>The graph appears here</h2>
+            <p>
+              The preset raises a monthly deposit halfway through a 30-year window
+              and changes the mix. Add a stretch to change the amount again.
+              Switch a stretch to dollars if you would rather type an amount per holding.
+            </p>
+          </section>
+          <div id="output" hidden></div>
+        </main>
+      </div>
+    </div>
+    <script src="/static/app.js?v=6"></script>
+  </body>
+</html>
