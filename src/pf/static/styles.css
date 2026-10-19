@@ -71,6 +71,10 @@ h3 { font-size: 18px; margin: 0 0 8px; }
 .quote { margin: 4px 0 0; min-height: 1.2em; font-size: 13px; color: var(--muted); }
 .quote.bad { color: var(--bad); }
 
+details.more { margin: 8px 0 14px; }
+details.more summary { cursor: pointer; }
+.custom-mix { margin-top: 12px; }
+
 .layout {
   display: grid;
   grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);

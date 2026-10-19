@@ -13,9 +13,15 @@ const CADENCE = {
 };
 
 const MIXES = [
-  { id: "stocks", title: "Mostly stocks", detail: "A long-lived US stock fund" },
-  { id: "balanced", title: "A balanced mix", detail: "60% stocks, 40% bonds" },
-  { id: "bonds", title: "Mostly bonds", detail: "20% stocks, 80% bonds" },
+  { id: "stocks", title: "Mostly stocks", detail: "US stocks since 1928" },
+  { id: "balanced", title: "A balanced mix", detail: "60% stocks, 40% Treasuries" },
+  { id: "bonds", title: "Mostly bonds", detail: "20% stocks, 80% Treasuries" },
+];
+
+const BACK_PRESETS = [
+  { id: "stocks", title: "Mostly stocks", detail: "A US stock fund" },
+  { id: "balanced", title: "A balanced mix", detail: "60% stock fund, 40% bond fund" },
+  { id: "bonds", title: "Mostly bonds", detail: "20% stock fund, 80% bond fund" },
 ];
 
 const TITLES = {
@@ -60,6 +66,7 @@ form.addEventListener("click", (event) => {
     const bucket = tab === "last" ? state.last : state.ahead;
     bucket.mix = trigger.dataset.mix;
   }
+  if (action === "back-preset") applyBackPreset(trigger.dataset.mix);
   if (action === "preview") {
     render();
     runBack(true);
@@ -88,7 +95,7 @@ form.addEventListener("change", (event) => {
   if (event.target.id === "rebalance") {
     document.getElementById("threshold-wrap").hidden = event.target.value !== "threshold";
   }
-  if (event.target.id === "compare" || event.target.classList.contains("symbol")) {
+  if (event.target.id === "compare" || event.target.classList.contains("symbol") || event.target.id === "bond-source") {
     captureActive();
     render();
     return;
@@ -202,6 +209,10 @@ function blankState() {
       annualContribution: 6000,
       annualWithdrawal: 0,
       glide: false,
+      stock: "VFINX",
+      bond: "VBMFX",
+      stockPercent: 60,
+      bondSource: "treasury",
     },
     last: {
       mix: "balanced",
@@ -210,6 +221,11 @@ function blankState() {
       annualSpend: 30000,
       inflation: true,
       carried: false,
+      certainty: 90,
+      stock: "VFINX",
+      bond: "VBMFX",
+      stockPercent: 60,
+      bondSource: "treasury",
     },
   };
 }
@@ -286,7 +302,15 @@ function renderBack() {
     </section>
     <section class="block">
       <h2>Holdings</h2>
-      <p class="help">Type a symbol, then choose whether its dividends buy more shares. Yearly cost is the fund's fee. 0.03 means 3 cents a year for every $100. Leave 0 to ignore fees.</p>
+      <p class="help">Start from a mix, then change any field. Yearly cost is the fund's fee. 0.03 means 3 cents a year for every $100. Leave 0 to ignore fees.</p>
+      <div class="mixes">
+        ${BACK_PRESETS.map((mix) => `
+          <button type="button" data-action="back-preset" data-mix="${mix.id}">
+            ${esc(mix.title)}
+            <small>${esc(mix.detail)}</small>
+          </button>
+        `).join("")}
+      </div>
       ${back.sleeves.map((sleeve, index) => `
         <div class="sleeve">
           <div class="row">
@@ -349,19 +373,13 @@ function renderAhead() {
   const ahead = state.ahead;
   const glideHelp = ahead.mix === "bonds"
     ? "This mix is already mostly bonds, so there is nowhere further to shift."
-    : "Mostly stocks eases toward about 60% stocks. A balanced mix eases toward about 40% stocks.";
+    : "Mostly stocks eases toward about 60% stocks, with the rest in 10-year Treasuries. A balanced mix eases toward about 40% stocks.";
   form.innerHTML = `
     <section class="block">
       <h2>If I keep going</h2>
-      <p class="help">Pick a mix of ordinary funds. The chart reshuffles how that mix behaved in past years. It is a range, not a forecast.</p>
-      <div class="mixes">
-        ${MIXES.map((mix) => `
-          <button type="button" data-action="mix" data-mix="${mix.id}" class="${ahead.mix === mix.id ? "on" : ""}" aria-pressed="${ahead.mix === mix.id ? "true" : "false"}">
-            ${esc(mix.title)}
-            <small>${esc(mix.detail)}</small>
-          </button>
-        `).join("")}
-      </div>
+      <p class="help">Presets use US stocks and 10-year Treasury bonds back to 1928. My mix lets you name the funds. The chart reshuffles those past years. It is a range, not a forecast.</p>
+      ${mixButtons(ahead)}
+      ${customFields(ahead)}
     </section>
     <section class="block">
       <h2>The amounts</h2>
@@ -385,28 +403,72 @@ function renderLast() {
   form.innerHTML = `
     <section class="block">
       <h2>How long it lasts</h2>
-      <p class="help">Start with a balance and a yearly amount to spend. The tool walks through each past stretch of that length and counts how often the money would have lasted.</p>
+      <p class="help">A retirement spending check against past stretches. It does not include Social Security, a pension, or taxes. Certainty is the share of those stretches in which the money lasted. Presets use US stocks and 10-year Treasuries back to 1928.</p>
       ${last.carried ? `<p class="banner">The starting amount is the ending value from What if I had.</p>` : ""}
-      <div class="mixes">
-        ${MIXES.map((mix) => `
-          <button type="button" data-action="mix" data-mix="${mix.id}" class="${last.mix === mix.id ? "on" : ""}" aria-pressed="${last.mix === mix.id ? "true" : "false"}">
-            ${esc(mix.title)}
-            <small>${esc(mix.detail)}</small>
-          </button>
-        `).join("")}
-      </div>
+      ${mixButtons(last)}
+      ${customFields(last)}
     </section>
     <section class="block">
       <h2>The amounts</h2>
       <label>I have<input id="last-starting" type="number" min="0" step="1000" value="${esc(last.starting)}"></label>
       <label>I'll spend each year<input id="last-spend" type="number" min="0" step="1000" value="${esc(last.annualSpend)}"></label>
       <label>Check stretches of this many years<input id="last-years" type="number" min="1" max="50" value="${esc(last.years)}"></label>
+      <label>Certainty, percent of past periods<input id="last-certainty" type="number" min="50" max="100" step="1" value="${esc(last.certainty)}"></label>
       <label class="check"><input id="last-inflation" type="checkbox" ${last.inflation ? "checked" : ""}> Spending rises with the cost of living</label>
     </section>
     <div class="buttons">
       <button class="primary" type="submit" id="run-last">Check the past</button>
     </div>
   `;
+}
+
+function mixButtons(bucket) {
+  const items = MIXES.concat([{ id: "custom", title: "My mix", detail: "Choose the split and the funds" }]);
+  return `<div class="mixes">${items.map((mix) => `
+    <button type="button" data-action="mix" data-mix="${mix.id}" class="${bucket.mix === mix.id ? "on" : ""}" aria-pressed="${bucket.mix === mix.id ? "true" : "false"}">
+      ${esc(mix.title)}
+      <small>${esc(mix.detail)}</small>
+    </button>
+  `).join("")}</div>`;
+}
+
+function customFields(bucket) {
+  if (bucket.mix !== "custom") return "";
+  const fund = bucket.bondSource === "fund";
+  return `
+    <div class="custom-mix">
+      <label>In stocks %<input id="stock-percent" type="number" min="0" max="100" step="1" value="${esc(bucket.stockPercent)}"></label>
+      <label>Stock fund<input id="stock-symbol" value="${esc(bucket.stock)}" autocomplete="off" spellcheck="false"></label>
+      <label>Bonds
+        <select id="bond-source">
+          <option value="treasury" ${bucket.bondSource === "treasury" ? "selected" : ""}>10-year Treasury returns</option>
+          <option value="fund" ${fund ? "selected" : ""}>A bond fund</option>
+        </select>
+      </label>
+      <div ${fund ? "" : "hidden"}>
+        <label>Bond fund<input id="bond-symbol" value="${esc(bucket.bond)}" autocomplete="off" spellcheck="false"></label>
+      </div>
+      <p class="help">Treasury figures are the yearly return on a 10-year US Treasury bond, including the price change, from 1928. They are not the yield alone.</p>
+    </div>
+  `;
+}
+
+function applyBackPreset(id) {
+  const sleeves = id === "stocks"
+    ? [{ symbol: "VFINX", drip: true, expense: 0 }]
+    : [
+        { symbol: "VFINX", drip: true, expense: 0 },
+        { symbol: "VBMFX", drip: true, expense: 0 },
+      ];
+  const weights = { stocks: [100], balanced: [60, 40], bonds: [20, 80] }[id] || [100];
+  state.back.sleeves = sleeves;
+  for (const period of state.back.periods) {
+    const base = period.mode === "dollars"
+      ? period.dollars.reduce((sum, value) => sum + Math.max(Number(value) || 0, 0), 0)
+      : Math.abs(Number(period.amount) || 0);
+    period.percents = weights.slice();
+    period.dollars = weights.map((pct) => Math.round(base * pct / 100));
+  }
 }
 
 function periodCard(period, index) {
@@ -504,6 +566,7 @@ function captureAhead() {
   state.ahead.annualWithdrawal = Number(form.querySelector("#ahead-spend").value) || 0;
   state.ahead.years = Number(form.querySelector("#ahead-years").value) || 0;
   state.ahead.glide = form.querySelector("#ahead-glide").checked;
+  captureCustom(state.ahead);
 }
 
 function captureLast() {
@@ -511,6 +574,18 @@ function captureLast() {
   state.last.annualSpend = Number(form.querySelector("#last-spend").value) || 0;
   state.last.years = Number(form.querySelector("#last-years").value) || 0;
   state.last.inflation = form.querySelector("#last-inflation").checked;
+  state.last.certainty = Number(form.querySelector("#last-certainty").value) || 0;
+  captureCustom(state.last);
+}
+
+function captureCustom(bucket) {
+  const percent = form.querySelector("#stock-percent");
+  if (!percent) return;
+  bucket.stockPercent = Number(percent.value);
+  bucket.stock = form.querySelector("#stock-symbol").value.trim().toUpperCase();
+  bucket.bondSource = form.querySelector("#bond-source").value;
+  const bond = form.querySelector("#bond-symbol");
+  if (bond) bucket.bond = bond.value.trim().toUpperCase();
 }
 
 function addSleeve() {
@@ -791,6 +866,10 @@ async function runAhead() {
     showError("Looking ahead must be between 1 and 60 years.");
     return;
   }
+  if (ahead.mix === "custom" && !(ahead.stockPercent >= 0 && ahead.stockPercent <= 100)) {
+    showError("The stock share must be between 0% and 100%.");
+    return;
+  }
   await runRequest("ahead", "run-ahead", () => post("/api/outlook", {
     mix: ahead.mix,
     years: ahead.years,
@@ -800,6 +879,7 @@ async function runAhead() {
     glide: ahead.mix === "bonds" ? false : ahead.glide,
     trials: 500,
     source: "market",
+    ...mixPayload(ahead),
   }));
 }
 
@@ -815,14 +895,34 @@ async function runLast() {
     showError("The stretch must be between 1 and 50 years.");
     return;
   }
+  if (!(last.certainty >= 50 && last.certainty <= 100)) {
+    showError("Certainty must be between 50% and 100%.");
+    return;
+  }
+  if (last.mix === "custom" && !(last.stockPercent >= 0 && last.stockPercent <= 100)) {
+    showError("The stock share must be between 0% and 100%.");
+    return;
+  }
   await runRequest("last", "run-last", () => post("/api/lasting", {
     mix: last.mix,
     years: last.years,
     starting: last.starting,
     annual_spend: last.annualSpend,
     inflation: last.inflation,
+    certainty: last.certainty / 100,
     source: "market",
+    ...mixPayload(last),
   }));
+}
+
+function mixPayload(bucket) {
+  return {
+    mix: bucket.mix,
+    stock_weight: (Number(bucket.stockPercent) || 0) / 100,
+    stock_symbol: bucket.stock || "VFINX",
+    bond_symbol: bucket.bond || "VBMFX",
+    bond_source: bucket.bondSource || "treasury",
+  };
 }
 
 async function runRequest(which, buttonId, job) {
@@ -915,6 +1015,7 @@ function renderBackResult(data) {
       </div>
       ${drop ? `<p class="caption">${esc(drop)}</p>` : ""}
       <p class="caption">The two return rates stay in the dollars of the time. They are not adjusted for the cost of living.</p>
+      ${moreNumbers(data.metrics)}
       <div class="chart-host" id="history-chart"></div>
       <ul class="legend" id="history-legend"></ul>
       ${data.notes.length ? `<ul class="notes">${data.notes.map((note) => `<li>${esc(note)}</li>`).join("")}</ul>` : ""}
@@ -959,7 +1060,7 @@ function renderAheadResult(data) {
     ${error}
     <section class="panel">
       <h2>${esc(data.mix_label)}</h2>
-      <p class="caption">${esc(data.detail)}. ${esc(data.plain)}</p>
+      <p class="caption">${esc(joinSentences(data.detail, data.plain))}</p>
       ${fan ? `${success}<div class="chart-host" id="forward-chart"></div><ul class="legend" id="forward-legend"></ul>` : ""}
     </section>
   `;
@@ -982,7 +1083,9 @@ function renderLastResult(data) {
     ? `<p>${esc(data.unavailable)}</p>`
     : `
       <div class="stats">
-        ${stat("Periods with money left", `${data.lasted} of ${data.tested}`, data.lasted / data.tested >= 0.5 ? "up" : "down")}
+        ${stat("Historical certainty", data.success_rate == null ? "—" : `${Math.round(data.success_rate * 100)}%`, data.success_rate >= (data.certainty || 0) ? "up" : "down")}
+        ${stat(`Spending at ${Math.round((data.certainty || 0) * 100)}%`, data.spend_at_certainty == null ? "—" : money.format(data.spend_at_certainty))}
+        ${stat("Periods with money left", `${data.lasted} of ${data.tested}`)}
         ${stat("Typical amount left", money.format(data.median_ending))}
         ${stat("Shortest run", data.shortest === data.horizon ? "Lasted" : `Year ${data.shortest + 1}`)}
       </div>
@@ -993,7 +1096,7 @@ function renderLastResult(data) {
     ${error}
     <section class="panel">
       <h2>${esc(data.mix_label)}</h2>
-      <p class="caption">${esc(data.detail)}. ${esc(data.plain || "")}</p>
+      <p class="caption">${esc(joinSentences(data.detail, data.plain))}</p>
       ${summary}
     </section>
   `;
@@ -1005,6 +1108,34 @@ function renderLastResult(data) {
     ],
     aria: "Money left at the end of each historical period",
   });
+}
+
+function joinSentences(detail, plain) {
+  const left = detail || "";
+  const right = plain || "";
+  if (!left) return right;
+  if (!right) return left;
+  return /[.!?]$/.test(left) ? `${left} ${right}` : `${left}. ${right}`;
+}
+
+function moreNumbers(metrics) {
+  if (!metrics) return "";
+  if (metrics.unavailable) {
+    return `<details class="more"><summary>More numbers</summary><p class="help">${esc(metrics.unavailable)}</p></details>`;
+  }
+  const sharpe = metrics.sharpe == null ? "—" : Number(metrics.sharpe).toFixed(2);
+  return `
+    <details class="more">
+      <summary>More numbers</summary>
+      <p class="help">These describe the mix year by year. They ignore when you added money. The Sharpe ratio compares that yearly pace with 3-month Treasury bills, then divides by how much the extra result jumps around. A higher Sharpe means more return for the swinging.</p>
+      <div class="stats">
+        ${stat("Sharpe ratio", sharpe)}
+        ${stat("Yearly swing", percent(metrics.volatility))}
+        ${stat("Best year", `${metrics.best_year}, ${percent(metrics.best_return, 1)}`)}
+        ${stat("Worst year", `${metrics.worst_year}, ${percent(metrics.worst_return, 1)}`)}
+      </div>
+    </details>
+  `;
 }
 
 function renderHistory(data) {

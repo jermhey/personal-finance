@@ -1,6 +1,6 @@
 # Later Ledger
 
-Three tools for ordinary money decisions: what a set of deposits would have been worth, a range if that mix keeps going, and how often a pile of money would have lasted.
+Three tools for ordinary money decisions: what a set of deposits would have been worth, a range if that mix keeps going, and how often a retirement-style spending plan would have lasted. Presets for the last two use US stocks and 10-year Treasury returns back to 1928.
 
 ## Run
 

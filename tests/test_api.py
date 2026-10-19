@@ -58,6 +58,8 @@ def test_preview_covers_thirty_years_and_returns_a_graph():
     assert date.fromisoformat(payload["points"][0]["date"]).year == 1994
     assert payload["points"][0]["real_value"] > payload["points"][0]["value"]
     assert payload["stats"]["max_drawdown"] is not None
+    assert payload["metrics"]["sharpe"] is not None
+    assert payload["metrics"]["worst_year"] is not None
 
 
 def test_benchmark_tracks_the_same_deposits():
@@ -138,3 +140,23 @@ def test_outlook_and_lasting_run_on_sample_prices():
     assert 0 <= body["lasted"] <= body["tested"]
     assert len(body["periods"]) == body["tested"]
     assert "cost of living" in body["plain"]
+
+
+def test_treasury_presets_report_certainty_from_1928():
+    from pf.decide import lasting
+
+    body = lasting(
+        "balanced",
+        30,
+        1_000_000,
+        40_000,
+        True,
+        "market",
+        None,
+        certainty=0.9,
+    )
+    assert body["tested"] > 50
+    assert body["history_start"].startswith("1928")
+    assert 0 < body["spend_at_certainty"] < 1_000_000
+    assert "10-year Treasury" in body["detail"]
+    assert "Social Security" in body["plain"]

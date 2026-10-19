@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field, field_validator
 from pf.cpi import adjust_path, level
 from pf.decide import lasting, outlook
 from pf.engine import ReplayResult, replay
+from pf.metrics import describe
 from pf.models import Flow, Forward, Plan, RebalanceRule, Regime, Series, Sleeve, validate_plan
 from pf.montecarlo import Projection, project
 from pf.prices import PriceStore, YahooStore, synthetic_series
@@ -103,7 +104,7 @@ class PlanIn(BaseModel):
 
 
 class OutlookIn(BaseModel):
-    mix: Literal["stocks", "balanced", "bonds"]
+    mix: Literal["stocks", "balanced", "bonds", "custom"]
     years: int = 30
     starting: float = 0
     annual_contribution: float = 0
@@ -111,15 +112,24 @@ class OutlookIn(BaseModel):
     glide: bool = False
     trials: int = 500
     source: Literal["market", "sample"] = "market"
+    stock_weight: float = 0.6
+    stock_symbol: str = "VFINX"
+    bond_symbol: str = "VBMFX"
+    bond_source: Literal["treasury", "fund"] = "treasury"
 
 
 class LastingIn(BaseModel):
-    mix: Literal["stocks", "balanced", "bonds"]
+    mix: Literal["stocks", "balanced", "bonds", "custom"]
     years: int = 30
     starting: float = 0
     annual_spend: float = 0
     inflation: bool = True
     source: Literal["market", "sample"] = "market"
+    certainty: float = 0.9
+    stock_weight: float = 0.6
+    stock_symbol: str = "VFINX"
+    bond_symbol: str = "VBMFX"
+    bond_source: Literal["treasury", "fund"] = "treasury"
 
 
 @app.get("/")
@@ -161,6 +171,10 @@ def outlook_route(body: OutlookIn) -> dict[str, Any]:
             body.trials,
             body.source,
             STORE,
+            stock_weight=body.stock_weight,
+            stock_symbol=body.stock_symbol,
+            bond_symbol=body.bond_symbol,
+            bond_source=body.bond_source,
         )
     except LookupError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -179,6 +193,11 @@ def lasting_route(body: LastingIn) -> dict[str, Any]:
             body.inflation,
             body.source,
             STORE,
+            certainty=body.certainty,
+            stock_weight=body.stock_weight,
+            stock_symbol=body.stock_symbol,
+            bond_symbol=body.bond_symbol,
+            bond_source=body.bond_source,
         )
     except LookupError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -401,6 +420,7 @@ def _payload(
             for report in result.sleeve_reports
         ],
         "notes": result.notes,
+        "metrics": describe(result.annual_returns),
         "benchmark": None
         if benchmark is None
         else {
