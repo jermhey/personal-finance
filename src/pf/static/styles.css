@@ -49,6 +49,28 @@ h3 { font-size: 18px; margin: 0 0 8px; }
 
 .lede { max-width: 62ch; margin: 0; color: var(--muted); }
 
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.tabs button { border-radius: 999px; padding: 8px 14px; }
+.tabs button[aria-selected="true"] {
+  background: var(--ink);
+  color: #f7f3eb;
+  border-color: var(--ink);
+}
+
+.mixes { display: grid; gap: 8px; }
+.mixes button { text-align: left; padding: 10px 12px; }
+.mixes button.on { background: #efe7d4; border-color: var(--ink); }
+.mixes small { display: block; color: var(--muted); font-size: 12px; }
+
+.quote { margin: 4px 0 0; min-height: 1.2em; font-size: 13px; color: var(--muted); }
+.quote.bad { color: var(--bad); }
+
 .layout {
   display: grid;
   grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);

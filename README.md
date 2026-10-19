@@ -1,6 +1,6 @@
-# Portfolio replay
+# Later Ledger
 
-A small site for replaying a portfolio from deposits, withdrawals, and target mixes, then sketching a forward path.
+Three tools for ordinary money decisions: what a set of deposits would have been worth, a range if that mix keeps going, and how often a pile of money would have lasted.
 
 ## Run
 

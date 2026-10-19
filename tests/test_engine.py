@@ -275,3 +275,38 @@ def test_weights_over_100_are_rejected():
         assert "100%" in str(exc)
     else:
         raise AssertionError("expected a validation error")
+
+
+def test_expense_ratio_reduces_shares_on_a_flat_price():
+    start = date(2020, 1, 2)
+    end = date(2021, 1, 4)
+    series = {"FIXA": _series("FIXA", [(start, 100, 0, 0), (end, 100, 0, 0)])}
+    plan = Plan(
+        start=start,
+        end=end,
+        sleeves=(Sleeve("FIXA", expense_ratio=0.01),),
+        flows=(Flow(1000, "once", start, None, {"FIXA": 1}),),
+        rebalance=RebalanceRule("never"),
+    )
+    result = replay(plan, series)
+    assert 980 < result.ending_value < 1000
+    assert any("fund cost" in note for note in result.notes)
+
+
+def test_drawdown_uses_the_deepest_drop():
+    days = [date(2020, 1, 2), date(2020, 1, 3), date(2020, 1, 6)]
+    series = {
+        "FIXA": _series("FIXA", [(days[0], 100, 0, 0), (days[1], 50, 0, 0), (days[2], 80, 0, 0)])
+    }
+    plan = Plan(
+        start=days[0],
+        end=days[2],
+        sleeves=(Sleeve("FIXA"),),
+        flows=(Flow(100, "once", days[0], None, {"FIXA": 1}),),
+        rebalance=RebalanceRule("never"),
+    )
+    result = replay(plan, series)
+    assert result.max_drawdown is not None
+    assert abs(result.max_drawdown - 0.5) < 1e-9
+    assert result.drawdown_peak == days[0]
+    assert result.drawdown_trough == days[1]

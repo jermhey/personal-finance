@@ -42,6 +42,7 @@ class Series:
 class Sleeve:
     symbol: str
     drip: bool = True
+    expense_ratio: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -104,6 +105,8 @@ def validate_plan(plan: Plan, forward: Forward | None = None) -> None:
     symbols = [s.symbol for s in plan.sleeves]
     if any(_SYMBOL.match(sym) is None for sym in symbols):
         raise ValueError("Symbols use letters, digits, and . ^ = - only.")
+    if any(not 0 <= sleeve.expense_ratio <= 0.05 for sleeve in plan.sleeves):
+        raise ValueError("Yearly fund cost must be between 0% and 5%.")
     if len(set(symbols)) != len(symbols):
         raise ValueError("Each holding can appear once.")
     if len(plan.regimes) > 24:

@@ -56,6 +56,9 @@ class ReplayResult:
     annual_returns: list[tuple[int, float]]
     notes: list[str]
     xirr_flows: list[tuple[date, float]]
+    max_drawdown: float | None = None
+    drawdown_peak: date | None = None
+    drawdown_trough: date | None = None
 
 
 @dataclass
@@ -110,8 +113,18 @@ def replay(plan: Plan, series: dict[str, Series]) -> ReplayResult:
     marks: list[Point] = []
     xirr_flows: list[tuple[date, float]] = []
     shortfall_total = 0.0
+    fees = {s.symbol: s.expense_ratio for s in plan.sleeves}
+    prev_day: date | None = None
 
     for day in sessions:
+        if prev_day is not None:
+            span = (day - prev_day).days
+            if span > 0:
+                for symbol in symbols:
+                    rate = fees[symbol]
+                    if rate and book.shares[symbol] > 0:
+                        book.shares[symbol] *= (1.0 - rate) ** (span / 365.25)
+        prev_day = day
         px = _prices(day, symbols, series, pointers, last_close)
         for symbol in symbols:
             bar = bars_by_date[symbol].get(day)
@@ -199,7 +212,12 @@ def replay(plan: Plan, series: dict[str, Series]) -> ReplayResult:
             f"Withdrawals were short ${shortfall_total:,.0f} in total because the account did not hold enough."
         )
     _listing_notes(plan, series, book.skipped, notes)
+    charged = [s for s in plan.sleeves if s.expense_ratio > 0]
+    if charged:
+        detail = ", ".join(f"{s.symbol} {s.expense_ratio:.2%}" for s in charged)
+        notes.append(f"A yearly fund cost was taken out of shares: {detail}.")
     points = _sample(marks)
+    max_drawdown, drawdown_peak, drawdown_trough = _drawdown(marks)
     sampling = _sampling_label(marks)
     annual = _annual_returns(growth)
     ending = marks[-1].value
@@ -243,6 +261,9 @@ def replay(plan: Plan, series: dict[str, Series]) -> ReplayResult:
         annual_returns=annual,
         notes=notes,
         xirr_flows=xirr_flows,
+        max_drawdown=max_drawdown,
+        drawdown_peak=drawdown_peak,
+        drawdown_trough=drawdown_trough,
     )
 
 
@@ -687,6 +708,27 @@ def _listing_notes(plan: Plan, series: dict[str, Series], skipped: dict[str, flo
                 notes.append(f"{sleeve.symbol} is priced from {meta.listed_on.isoformat()}.")
         if not meta.bars:
             notes.append(f"{sleeve.symbol} has no prices in this window.")
+
+
+def _drawdown(marks: list[Point]) -> tuple[float | None, date | None, date | None]:
+    peak = 0.0
+    peak_date: date | None = None
+    worst = 0.0
+    start: date | None = None
+    end: date | None = None
+    for point in marks:
+        if point.value >= peak:
+            peak = point.value
+            peak_date = point.date
+        if peak > 1:
+            drop = (peak - point.value) / peak
+            if drop > worst:
+                worst = drop
+                start = peak_date
+                end = point.date
+    if worst <= 0 or start is None or end is None:
+        return None, None, None
+    return worst, start, end
 
 
 def _sample(marks: list[Point]) -> list[Point]:

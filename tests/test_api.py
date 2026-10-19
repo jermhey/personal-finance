@@ -56,3 +56,85 @@ def test_preview_covers_thirty_years_and_returns_a_graph():
     assert payload["montecarlo"]["success_rate"] is not None
     assert len(payload["montecarlo"]["p50"]) == 31
     assert date.fromisoformat(payload["points"][0]["date"]).year == 1994
+    assert payload["points"][0]["real_value"] > payload["points"][0]["value"]
+    assert payload["stats"]["max_drawdown"] is not None
+
+
+def test_benchmark_tracks_the_same_deposits():
+    client = TestClient(server.app)
+    response = client.post(
+        "/api/preview",
+        json={
+            "start": "2020-01-02",
+            "end": "2020-06-30",
+            "sleeves": [{"symbol": "AAA", "drip": True, "expense_ratio": 0}],
+            "flows": [
+                {
+                    "amount": 100,
+                    "frequency": "monthly",
+                    "start": "2020-01-02",
+                    "end": "2020-06-30",
+                    "allocation": {"AAA": 1},
+                }
+            ],
+            "benchmark": "BBB",
+        },
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    bench = payload["benchmark"]
+    assert bench["symbol"] == "BBB"
+    assert bench["error"] is None
+    assert len(bench["values"]) == len(payload["points"])
+    assert bench["values"][-1] > 0
+
+
+def test_unknown_symbol_is_a_clear_404(monkeypatch):
+    class Boom:
+        def load(self, symbol, start, end):
+            raise LookupError(f"No price history for {symbol}.")
+
+    monkeypatch.setattr(server, "STORE", Boom())
+    response = TestClient(server.app).get("/api/symbol/ZZZZQA")
+    assert response.status_code == 404
+    assert "ZZZZQA" in response.json()["detail"]
+
+
+def test_outlook_and_lasting_run_on_sample_prices():
+    client = TestClient(server.app)
+    outlook = client.post(
+        "/api/outlook",
+        json={
+            "mix": "balanced",
+            "years": 20,
+            "starting": 10000,
+            "annual_contribution": 5000,
+            "annual_withdrawal": 0,
+            "glide": False,
+            "trials": 80,
+            "source": "sample",
+        },
+    )
+    assert outlook.status_code == 200, outlook.text
+    fan = outlook.json()["montecarlo"]
+    assert fan is not None
+    assert len(fan["p50"]) == 21
+    assert "not a promise" in outlook.json()["plain"]
+
+    lasting = client.post(
+        "/api/lasting",
+        json={
+            "mix": "stocks",
+            "years": 30,
+            "starting": 1000000,
+            "annual_spend": 40000,
+            "inflation": True,
+            "source": "sample",
+        },
+    )
+    assert lasting.status_code == 200, lasting.text
+    body = lasting.json()
+    assert body["tested"] > 5
+    assert 0 <= body["lasted"] <= body["tested"]
+    assert len(body["periods"]) == body["tested"]
+    assert "cost of living" in body["plain"]
