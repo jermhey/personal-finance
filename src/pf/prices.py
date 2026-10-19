@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import json
+import os
 import random
 from datetime import date, timedelta
 from pathlib import Path
 
 from pf.models import Bar, Series
 
-CACHE = Path(__file__).resolve().parents[2] / "data" / "cache"
+_DEFAULT_CACHE = Path(__file__).resolve().parents[2] / "data" / "cache"
+CACHE = Path(os.environ.get("PRICE_CACHE_DIR", _DEFAULT_CACHE))
 
 
 class PriceStore:
